@@ -1,12 +1,15 @@
-package com.cowbell.cordova.geofence;
+package com.appelit.geofence;
 
 import com.google.gson.GsonBuilder;
 
-public class Gson {
+class Gson {
     private static final com.google.gson.Gson gson;
 
     static {
-        gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
+        gson = new GsonBuilder()
+                .excludeFieldsWithoutExposeAnnotation()
+                .enableComplexMapKeySerialization()
+                .create();
     }
 
     public static com.google.gson.Gson get() {

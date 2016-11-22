@@ -1,234 +1,352 @@
-var exec = require("cordova/exec"),
-    channel = require("cordova/channel");
+/* global cordova:false */
+/* globals window */
 
-module.exports = {
+/*!
+ * Module dependencies.
+ */
+
+var exec = cordova.require('cordova/exec');
+
+/**
+ * Geofence constructor.
+ *
+ * @param {Object} options to initiate Push Notifications.
+ * @return {Geofence} instance that can be monitored and cancelled.
+ */
+var Geofence = function (options) {
+    this._handlers = {
+        transition: [],
+        error: []
+    };
+
+    // require options parameter
+    if (typeof options === 'undefined') {
+        throw new Error('The options argument is required.');
+    }
+
+    var that = this;
+
     /**
-     * Initializing geofence plugin
+     * Emit an event.
      *
-     * @name initialize
-     * @param  {Function} success callback
-     * @param  {Function} error callback
+     * This is intended for internal use only.
      *
-     * @return {Promise}
+     * @param {String} eventName is the event to trigger.
+     * @param {*} all arguments are passed to the event listeners.
+     *
+     * @return {Boolean} is true when the event is triggered otherwise false.
      */
-    initialize: function (success, error) {
-        return execPromise(success, error, "GeofencePlugin", "initialize", []);
-    },
-    /**
-     * Adding new geofence to monitor.
-     * Geofence could override the previously one with the same id.
-     *
-     * @name addOrUpdate
-     * @param {Geofence|Array} geofences
-     * @param {Function} success callback
-     * @param {Function} error callback
-     *
-     * @return {Promise}
-     */
-    addOrUpdate: function (geofences, success, error) {
-        if (!Array.isArray(geofences)) {
-            geofences = [geofences];
+    function emit() {
+        var args = Array.prototype.slice.call(arguments);
+        var eventName = args.shift();
+
+        if (!that._handlers.hasOwnProperty(eventName)) {
+            return false;
         }
 
-        geofences.forEach(coerceProperties);
-
-        return execPromise(success, error, "GeofencePlugin", "addOrUpdate", geofences);
-    },
-    /**
-     * Removing geofences with given ids
-     *
-     * @name  remove
-     * @param  {Number|Array} ids
-     * @param  {Function} success callback
-     * @param  {Function} error callback
-     * @return {Promise}
-     */
-    remove: function (ids, success, error) {
-        if (!Array.isArray(ids)) {
-            ids = [ids];
+        for (var i = 0, length = that._handlers[eventName].length; i < length; i++) {
+            var callback = that._handlers[eventName][i];
+            if (typeof callback === 'function') {
+                callback.apply(undefined, args);
+            } else {
+                console.log('event handler: ' + eventName + ' must be a function');
+            }
         }
-        return execPromise(success, error, "GeofencePlugin", "remove", ids);
-    },
-    /**
-     * removing all stored geofences on the device
-     *
-     * @name  removeAll
-     * @param  {Function} success callback
-     * @param  {Function} error callback
-     * @return {Promise}
-     */
-    removeAll: function (success, error) {
-        return execPromise(success, error, "GeofencePlugin", "removeAll", []);
-    },
-    /**
-     * Getting all watched geofences from the device
-     *
-     * @name  getWatched
-     * @param  {Function} success callback
-     * @param  {Function} error callback
-     * @return {Promise} if successful returns geofences array stringify to JSON
-     */
-    getWatched: function (success, error) {
-        return execPromise(success, error, "GeofencePlugin", "getWatched", []);
-    },
-    /**
-     * Called when app is opened via Notification bar
-     *
-     * @name onNotificationClicked
-     * @param {JSON} notificationData user data from notification
-     */
-    onNotificationClicked: function (notificationData) {},
-    /**
-     * Called when app received geofence transition event
-     * @param  {Array} geofences
-     */
-    onTransitionReceived: function (geofences) {
-        this.receiveTransition(geofences);
-    },
-    /**
-     * Called when app received geofence transition event
-     * @deprecated since version 0.4.0, see onTransitionReceived
-     * @param  {Array} geofences
-     */
-    receiveTransition: function (geofences) {},
-    /**
-     * Simple ping function for testing
-     * @param  {Function} success callback
-     * @param  {Function} error callback
-     *
-     * @return {Promise}
-     */
-    ping: function (success, error) {
-        return execPromise(success, error, "GeofencePlugin", "ping", []);
+
+        return true;
+    }
+
+    function executeFunctionByName(functionName, context) {
+        var args = Array.prototype.slice.call(arguments, 2);
+        var namespaces = functionName.split('.');
+        var func = namespaces.pop();
+
+        for (var i = 0; i < namespaces.length; i++) {
+            context = context[namespaces[i]];
+        }
+
+        return context[func].apply(context, args);
+    }
+
+    // triggered on notification
+    var success = function (result) {
+        if (result) {
+            if (result.callback) {
+                executeFunctionByName(result.callback, window, result);
+            } else if (result.ids) {
+                emit('transition', result);
+            }
+        }
+    };
+
+    // triggered on error
+    var fail = function (msg) {
+        var e = (typeof msg === 'string') ? new Error(msg) : msg;
+        emit('error', e);
+    };
+
+    // wait at least one process tick to allow event subscriptions
+    setTimeout(function () {
+        exec(success, fail, 'Geofence', 'init', [options]);
+    }, 10);
+};
+
+Geofence.prototype.addFences = function (fences, successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.addFences failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.addFences failure: success callback parameter must be a function');
+        return;
+    }
+
+    if (!(fences instanceof Array)) {
+        fences = [fences];
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'addFences', [fences]);
+};
+
+Geofence.prototype.removeFences = function (ids, successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.removeFences failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.removeFences failure: success callback parameter must be a function');
+        return;
+    }
+
+    if (!(ids instanceof Array)) {
+        ids = [ids];
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'removeFences', [ids]);
+};
+
+Geofence.prototype.removeAllFences = function (successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.removeAllFences failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.removeAllFences failure: success callback parameter must be a function');
+        return;
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'removeAllFences', []);
+};
+
+Geofence.prototype.clearAllNotifications = function (successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.clearAllNotifications failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.clearAllNotifications failure: success callback parameter must be a function');
+        return;
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'clearAllNotifications', []);
+};
+
+Geofence.prototype.getFence = function (id, successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.getFence failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.getFence failure: success callback parameter must be a function');
+        return;
+    }
+
+    if (!id) {
+        console.log('Geofence.getFence failure: id must be defined');
+        return;
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'getFence', [id]);
+};
+
+Geofence.prototype.getFences = function (successCallback, errorCallback) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function (error) {
+            console.log('Geofence Error: ' + JSON.stringify(error));
+        };
+    }
+
+    if (typeof errorCallback !== 'function') {
+        console.log('Geofence.getFences failure: failure parameter not a function');
+        return;
+    }
+
+    if (typeof successCallback !== 'function') {
+        console.log('Geofence.getFences failure: success callback parameter must be a function');
+        return;
+    }
+
+    exec(successCallback, errorCallback, 'Geofence', 'getFences', []);
+};
+
+/**
+ * Listen for an event.
+ *
+ * The following events are supported:
+ *
+ *   - transition
+ *   - error
+ *
+ * @param {String} eventName to subscribe to.
+ * @param {Function} callback triggered on the event.
+ */
+
+Geofence.prototype.on = function (eventName, callback) {
+    if (this._handlers.hasOwnProperty(eventName)) {
+        this._handlers[eventName].push(callback);
     }
 };
 
-function execPromise(success, error, pluginName, method, args) {
-    return new Promise(function (resolve, reject) {
-        exec(function (result) {
-                resolve(result);
-                if (typeof success === "function") {
-                    success(result);
-                }
-            },
-            function (reason) {
-                reject(reason);
-                if (typeof error === "function") {
-                    error(reason);
-                }
-            },
-            pluginName,
-            method,
-            args);
-    });
-}
-
-function coerceProperties(geofence) {
-    if (geofence.id) {
-        geofence.id = geofence.id.toString();
-    } else {
-        throw new Error("Geofence id is not provided");
-    }
-
-    if (geofence.latitude) {
-        geofence.latitude = coerceNumber("Geofence latitude", geofence.latitude);
-    } else {
-        throw new Error("Geofence latitude is not provided");
-    }
-
-    if (geofence.longitude) {
-        geofence.longitude = coerceNumber("Geofence longitude", geofence.longitude);
-    } else {
-        throw new Error("Geofence longitude is not provided");
-    }
-
-    if (geofence.radius) {
-        geofence.radius = coerceNumber("Geofence radius", geofence.radius);
-    } else {
-        throw new Error("Geofence radius is not provided");
-    }
-
-    if (geofence.transitionType) {
-        geofence.transitionType = coerceNumber("Geofence transitionType", geofence.transitionType);
-    } else {
-        throw new Error("Geofence transitionType is not provided");
-    }
-
-    if (geofence.notification) {
-        if (geofence.notification.id) {
-            geofence.notification.id = coerceNumber("Geofence notification.id", geofence.notification.id);
-        }
-
-        if (geofence.notification.title) {
-            geofence.notification.title = geofence.notification.title.toString();
-        }
-
-        if (geofence.notification.text) {
-            geofence.notification.text = geofence.notification.text.toString();
-        }
-
-        if (geofence.notification.smallIcon) {
-            geofence.notification.smallIcon = geofence.notification.smallIcon.toString();
-        }
-
-        if (geofence.notification.openAppOnClick) {
-            geofence.notification.openAppOnClick = coerceBoolean("Geofence notification.openAppOnClick", geofence.notification.openAppOnClick);
-        }
-
-        if (geofence.notification.vibration) {
-            if (Array.isArray(geofence.notification.vibration)) {
-                for (var i=0; i<geofence.notification.vibration.length; i++) {
-                    geofence.notification.vibration[i] = coerceInteger("Geofence notification.vibration["+ i +"]", geofence.notification.vibration[i]);
-                }
-            } else {
-                throw new Error("Geofence notification.vibration is not an Array");
-            }
+/**
+ * Remove event listener.
+ *
+ * @param {String} eventName to match subscription.
+ * @param {Function} handle function associated with event.
+ */
+Geofence.prototype.off = function (eventName, handle) {
+    if (this._handlers.hasOwnProperty(eventName)) {
+        var handleIndex = this._handlers[eventName].indexOf(handle);
+        if (handleIndex >= 0) {
+            this._handlers[eventName].splice(handleIndex, 1);
         }
     }
-}
+};
 
-function coerceNumber(name, value) {
-    if (typeof(value) !== "number") {
-        console.warn(name + " is not a number, trying to convert to number");
-        value = Number(value);
-
-        if (isNaN(value)) {
-            throw new Error("Cannot convert " + name + " to number");
-        }
+Geofence.prototype.finish = function (successCallback, errorCallback, id) {
+    if (!successCallback) {
+        successCallback = function () {
+        };
+    }
+    if (!errorCallback) {
+        errorCallback = function () {
+        };
+    }
+    if (!id) {
+        id = 'handler';
     }
 
-    return value;
-}
-
-function coerceInteger(name, value) {
-    if (!isInt(value)) {
-        console.warn(name + " is not an integer, trying to convert to integer");
-        value = parseInt(value);
-
-        if (isNaN(value)) {
-            throw new Error("Cannot convert " + name + " to integer");
-        }
+    if (typeof successCallback !== 'function') {
+        console.log('finish failure: success callback parameter must be a function');
+        return;
     }
 
-    return value;
-}
-
-function coerceBoolean(name, value) {
-    if (typeof(value) !== "boolean") {
-        console.warn(name + " is not a boolean value, converting to boolean");
-        value = Boolean(value);
+    if (typeof errorCallback !== 'function') {
+        console.log('finish failure: failure parameter not a function');
+        return;
     }
 
-    return value;
-}
+    exec(successCallback, errorCallback, 'Geofence', 'finish', [id]);
+};
 
-function isInt(n){
-    return Number(n) === n && n % 1 === 0;
-}
+/*!
+ * Push Notification Plugin.
+ */
 
-// Called after "deviceready" event
-channel.deviceready.subscribe(function () {
-    // Device is ready now, the listeners are registered
-    // and all queued events can be executed.
-    exec(null, null, "GeofencePlugin", "deviceReady", []);
-});
+module.exports = {
+    /**
+     * Register for Push Notifications.
+     *
+     * This method will instantiate a new copy of the Geofence object
+     * and start the registration process.
+     *
+     * @param {Object} options
+     * @return {Geofence} instance
+     */
+
+    init: function (options) {
+        return new Geofence(options);
+    },
+
+    hasPermission: function (successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'Geofence', 'hasPermission', []);
+    },
+
+    /**
+     * Geofence Object.
+     *
+     * Expose the Geofence object for direct use
+     * and testing. Typically, you should use the
+     * .init helper method.
+     */
+    Geofence: Geofence,
+
+    /**
+     * TransitionTypes Object.
+     *
+     * Expose the TransitionTypes object
+     */
+    TransitionTypes: {
+        ENTER: 1,
+        EXIT: 2,
+        DWELL: 4
+    }
+};
