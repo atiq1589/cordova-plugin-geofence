@@ -1,4 +1,3 @@
-#import "APPAppEventDelegate.h"
 #import <Cordova/CDV.h>
 #import <Cordova/CDVPlugin.h>
 

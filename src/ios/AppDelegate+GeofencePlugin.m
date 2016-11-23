@@ -45,6 +45,8 @@ static char notificationPermissionKey;
 }
 
 - (AppDelegate*)geofencePluginSwizzledInit {
+    NSLog(@"geofencePluginSwizzledInit");
+    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(geofencePluginDidFinishLaunching:) name:UIApplicationDidFinishLaunchingNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(geofencePluginDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(geofencePluginDidEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
@@ -56,41 +58,80 @@ static char notificationPermissionKey;
 #pragma mark Methods
 
 - (void)addFences:(NSArray*)fences {
-    for (NSDictionary* fence in fences) {
-        NSString *fenceId = [fence objectForKey:@"id"];
-        if (fenceId == nil) {
-            continue;
-        }
-            
-        BOOL add = YES;
-        for (int i = 0; i < [self.fences count]; i++) {
-            NSString *existingId = [[self.fences objectAtIndex:i] objectForKey:@"id"];
-            
-            if ([fenceId isEqualToString:existingId]) {
-                add = NO;
-                [self.fences replaceObjectAtIndex:i withObject:fence];
-            }
-        }
-                
-        if (add == YES) {
-            [self.fences addObject:fence];
-        }
-
-        if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedAlways) {
-            double latitude = [[fence objectForKey:@"latitude"] doubleValue];
-            double longitude = [[fence objectForKey:@"longitude"] doubleValue];
-            float radius = [[fence objectForKey:@"radius"] floatValue];
-            
-            CLLocationCoordinate2D coords = CLLocationCoordinate2DMake(latitude, longitude);
-            CLRegion* region = [[CLCircularRegion alloc] initWithCenter:coords radius:radius identifier:fenceId];
-            
-            if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0")) {
-                int transitionType = [[fence objectForKey:@"transitionType"] intValue];
-                region.notifyOnEntry = (transitionType & 1) == 1 || (transitionType & 4) == 4;
-                region.notifyOnExit = (transitionType & 2) == 2;
-            }
+    if (fences == nil) {
+        NSLog(@"restoring %d fences", [self.fences count]);
         
-            [self.locationManager startMonitoringForRegion:region];
+        for(int i = 0; i < [self.fences count]; i++) {
+            NSDictionary *fence = [self.fences objectAtIndex:i];
+            NSString *fenceId = [fence objectForKey:@"id"];
+
+            BOOL restore = YES;
+            for(CLRegion *region in self.locationManager.monitoredRegions) {
+                if ([region.identifier isEqualToString:fenceId]) {
+                    restore = NO;
+                    break;
+                }
+            }
+            
+            if (restore) {
+                NSLog(@"Fence %@ not found, adding to locationManager", fenceId);
+                
+                double latitude = [[fence objectForKey:@"latitude"] doubleValue];
+                double longitude = [[fence objectForKey:@"longitude"] doubleValue];
+                float radius = [[fence objectForKey:@"radius"] floatValue];
+                
+                CLLocationCoordinate2D coords = CLLocationCoordinate2DMake(latitude, longitude);
+                CLRegion* region = [[CLCircularRegion alloc] initWithCenter:coords radius:radius identifier:fenceId];
+                
+                if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0")) {
+                    int transitionType = [[fence objectForKey:@"transitionType"] intValue];
+                    region.notifyOnEntry = (transitionType & 1) == 1 || (transitionType & 4) == 4;
+                    region.notifyOnExit = (transitionType & 2) == 2;
+                }
+                
+                [self.locationManager startMonitoringForRegion:region];
+            }
+        }
+    } else {
+        NSLog(@"addFences called with %d fences", [fences count]);
+        for (NSDictionary* fence in fences) {
+            NSString *fenceId = [fence objectForKey:@"id"];
+            if (fenceId == nil) {
+                continue;
+            }
+            
+            BOOL add = YES;
+            for (int i = 0; i < [self.fences count]; i++) {
+                NSString *existingId = [[self.fences objectAtIndex:i] objectForKey:@"id"];
+                
+                if ([fenceId isEqualToString:existingId]) {
+                    add = NO;
+                    [self.fences replaceObjectAtIndex:i withObject:fence];
+                }
+            }
+            
+            if (add == YES) {
+                [self.fences addObject:fence];
+            }
+            
+            if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedAlways) {
+                double latitude = [[fence objectForKey:@"latitude"] doubleValue];
+                double longitude = [[fence objectForKey:@"longitude"] doubleValue];
+                float radius = [[fence objectForKey:@"radius"] floatValue];
+                
+                CLLocationCoordinate2D coords = CLLocationCoordinate2DMake(latitude, longitude);
+                CLRegion* region = [[CLCircularRegion alloc] initWithCenter:coords radius:radius identifier:fenceId];
+                
+                if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0")) {
+                    int transitionType = [[fence objectForKey:@"transitionType"] intValue];
+                    region.notifyOnEntry = (transitionType & 1) == 1 || (transitionType & 4) == 4;
+                    region.notifyOnExit = (transitionType & 2) == 2;
+                }
+                
+                [self.locationManager startMonitoringForRegion:region];
+            } else {
+                NSLog(@"startMonitoringForRegion skipped, authorization not granted");
+            }
         }
     }
 }
@@ -151,10 +192,14 @@ static char notificationPermissionKey;
     }
 }
 
-- (void)checkPermissions:(UNAuthorizationOptions)types {
+- (void)checkPermissions:(NSNumber*)types {
+    if ([CLLocationManager authorizationStatus] != kCLAuthorizationStatusAuthorizedAlways) {
+        [self.locationManager requestAlwaysAuthorization];
+    }
+
     [self.notificationCenter getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
         if (settings.authorizationStatus != UNAuthorizationStatusAuthorized) {
-            [self.notificationCenter requestAuthorizationWithOptions:types completionHandler:^(BOOL granted, NSError * _Nullable error) {
+            [self.notificationCenter requestAuthorizationWithOptions:[types intValue] completionHandler:^(BOOL granted, NSError * _Nullable error) {
                 if (error != nil) {
                     NSLog(@"GeofencePlugin localNotification permission error: %@", [error localizedDescription]);
                     self.notificationPermission = [NSNumber numberWithBool:NO];
@@ -167,18 +212,20 @@ static char notificationPermissionKey;
     }];
 }
 
-- (BOOL)hasPermission {
+- (NSNumber*)hasPermission {
     if (self.notificationPermission != nil && [self.notificationPermission boolValue] && self.locationPermission != nil && [self.locationPermission boolValue]) {
-        return YES;
+        return [NSNumber numberWithBool:YES];
     }
 
-    return NO;
+    return [NSNumber numberWithBool:NO];
 }
 
 #pragma mark -
 #pragma mark Delegates
 
 - (void)geofencePluginDidFinishLaunching:(NSNotification*)notification {
+    NSLog(@"geofencePluginDidFinishLaunching");
+    
     self.locationManager = [[CLLocationManager alloc] init];
     self.locationManager.delegate = self;
 
@@ -188,12 +235,15 @@ static char notificationPermissionKey;
     }
 
     NSString *path = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)[0];
-    NSString *filename = [path stringByAppendingString:@"fences.dat"];
+    NSString *filename = [path stringByAppendingString:@"/fences.dat"];
     
-    self.fences = [NSMutableArray array];
-
     if ([[NSFileManager defaultManager] fileExistsAtPath:filename]) {
-        [self addFences:[NSArray arrayWithContentsOfFile:filename]];
+        NSLog(@"Restoring previous fences");
+        self.fences = [NSMutableArray arrayWithContentsOfFile:filename];
+    }
+    
+    if (self.fences == nil) {
+        self.fences = [NSMutableArray array];
     }
     
     if (notification) {
@@ -208,9 +258,13 @@ static char notificationPermissionKey;
 }
 
 - (void)geofencePluginDidBecomeActive:(NSNotification*)notification {
+    NSLog(@"geofencePluginDidBecomeActive");
+
+    [self.locationManager stopMonitoringSignificantLocationChanges];
+    
     UIApplication *application = notification.object;
     
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
     if (geofenceHandler.clearBadge) {
         application.applicationIconBadgeNumber = 0;
     }
@@ -218,32 +272,43 @@ static char notificationPermissionKey;
     [geofenceHandler load];
     
     if (self.transitionEvent) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [geofenceHandler sendEvent:self.transitionEvent];
-        });
-
+        NSMutableDictionary *transitionEvent = [self.transitionEvent mutableCopy];
+        [transitionEvent setValue:[NSNumber numberWithBool:NO] forKey:@"foreground"];
+        [transitionEvent setValue:self.coldstart forKey:@"coldstart"];
         self.transitionEvent = nil;
         self.coldstart = [NSNumber numberWithBool:NO];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [geofenceHandler sendEvent:transitionEvent];
+        });
     }
 }
 
 - (void)geofencePluginDidEnterBackground:(NSNotification*)notification {
+    [self.locationManager startMonitoringSignificantLocationChanges];
+    
+    NSLog(@"geofencePluginDidEnterBackground");
     __block UIBackgroundTaskIdentifier identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
         if (identifier != UIBackgroundTaskInvalid) {
+            NSLog(@"Expired");
             [[UIApplication sharedApplication] endBackgroundTask:identifier];
             identifier = UIBackgroundTaskInvalid;
         }
     }];
 
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
     dispatch_async(dispatch_get_main_queue(), ^{
         NSString *path = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)[0];
-        NSString *filename = [path stringByAppendingString:@"fences.dat"];
+        NSString *filename = [path stringByAppendingString:@"/fences.dat"];
         
+        NSLog(@"Saving fences to %@", filename);
         [self.fences writeToFile:filename atomically:YES];
+
+        NSLog(@"Telling handler to save pending data");
         [geofenceHandler save];
         
         if (identifier != UIBackgroundTaskInvalid) {
+            NSLog(@"Finishing");
             [[UIApplication sharedApplication] endBackgroundTask:identifier];
             identifier = UIBackgroundTaskInvalid;
         }
@@ -255,7 +320,7 @@ static char notificationPermissionKey;
         NSDictionary *transitionEvent = [notification userInfo];
 
         if (transitionEvent) {
-            GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+            GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
             dispatch_async(dispatch_get_main_queue(), ^{
                 [geofenceHandler sendEvent:transitionEvent];
             });
@@ -267,7 +332,7 @@ static char notificationPermissionKey;
     NSMutableDictionary *transitionEvent = [[notification userInfo] mutableCopy];
     [transitionEvent setObject:identifier forKey:@"callback"];
     
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
 
     if (application.applicationState == UIApplicationStateActive) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -298,7 +363,7 @@ static char notificationPermissionKey;
 }
 
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center willPresentNotification:(UNNotification *)notification withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
     
     if ([[UIApplication sharedApplication] applicationState] == UIApplicationStateActive && !geofenceHandler.forceShow) {
         completionHandler(UNNotificationPresentationOptionNone);
@@ -318,7 +383,7 @@ static char notificationPermissionKey;
                 [transitionEvent setObject:response.actionIdentifier forKey:@"callback"];
             }
         
-            GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+            GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
             if ([[UIApplication sharedApplication] applicationState] == UIApplicationStateActive) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [geofenceHandler sendEvent:transitionEvent];
@@ -358,45 +423,61 @@ static char notificationPermissionKey;
 - (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
     if (status != kCLAuthorizationStatusAuthorizedAlways) {
         self.locationPermission = [NSNumber numberWithBool:NO];
+    } else {
+        self.locationPermission = [NSNumber numberWithBool:YES];
+        [self addFences:nil];
     }
 }
 
 - (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
+    NSLog(@"didStartMonitoringForRegion %@", region.identifier);
     [manager requestStateForRegion:region];
 }
 
 - (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error {
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [geofenceHandler sendError:@"failed" withMessage:[error localizedDescription]];
-    });
-}
+    NSLog(@"monitoringDidFailForRegion %@ - %@", region.identifier, [error localizedDescription]);
 
-- (void)locationManager:(CLLocationManager *)manager didEnterRegion:(CLRegion *)region {
-    [self handleTransition:1 forRegion:region];
-}
-
-- (void)locationManager:(CLLocationManager *)manager didExitRegion:(CLRegion *)region {
-    [self handleTransition:2 forRegion:region];
+    if (error.domain == kCLErrorDomain && error.code == 5) {
+        [manager requestStateForRegion:region];
+    } else {
+        GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [geofenceHandler sendError:@"failed" withMessage:[error localizedDescription]];
+        });
+    }
 }
 
 - (void)locationManager:(CLLocationManager *)manager didDetermineState:(CLRegionState)state forRegion:(CLRegion *)region {
+    NSLog(@"didDetermineState - %@", region.identifier);
     if (state == CLRegionStateInside) {
         [self handleTransition:1 forRegion:region];
+    } else if (state == CLRegionStateOutside) {
+        [self handleTransition:2 forRegion:region];
     }
 }
 
 - (void)handleTransition:(int)transitionType forRegion:(CLRegion*)region {
-    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"GeofencePlugin"];
+    GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
 
+    NSLog(@"handleTransition: %d, %@", transitionType, region.identifier);
+    
+    NSLog(@"geofenceHandler: %@", geofenceHandler);
+    
     for(NSDictionary *fence in self.fences) {
         NSString *fenceId = [fence objectForKey:@"id"];
         
         if ([fenceId isEqualToString:region.identifier]) {
             id transitionTypeField = [fence objectForKey:@"transitionType"];
-            if (transitionTypeField == NULL || ![transitionTypeField isMemberOfClass:[NSNumber class]] || ([transitionTypeField intValue] & transitionType) != transitionType) {
+            if (transitionTypeField == NULL || ![transitionTypeField isKindOfClass:[NSNumber class]] || ([transitionTypeField intValue] & transitionType) != transitionType) {
                 continue;
             }
+            
+            double timestamp = [self.locationManager.location.timestamp timeIntervalSince1970];
+            if (timestamp == 0) {
+                timestamp = [[NSDate dateWithTimeIntervalSinceNow:0] timeIntervalSince1970];
+            }
+            
+            timestamp = timestamp * 1000;
             
             NSMutableDictionary *transitionLocation = [NSMutableDictionary dictionary];
             [transitionLocation setValue:[NSNumber numberWithDouble:self.locationManager.location.coordinate.latitude] forKey:@"latitude"];
@@ -405,7 +486,7 @@ static char notificationPermissionKey;
             [transitionLocation setValue:[NSNumber numberWithDouble:self.locationManager.location.altitude] forKey:@"altitude"];
             [transitionLocation setValue:[NSNumber numberWithFloat:self.locationManager.location.course] forKey:@"bearing"];
             [transitionLocation setValue:[NSNumber numberWithFloat:self.locationManager.location.speed] forKey:@"speed"];
-            [transitionLocation setValue:[NSNumber numberWithLong:[self.locationManager.location.timestamp timeIntervalSince1970]] forKey:@"time"];
+            [transitionLocation setValue:[NSNumber numberWithLong:timestamp] forKey:@"time"];
             [transitionLocation setValue:[NSNumber numberWithBool:YES] forKey:@"hasAccuracy"];
             [transitionLocation setValue:[NSNumber numberWithBool:YES] forKey:@"hasAltitude"];
             [transitionLocation setValue:[NSNumber numberWithBool:(self.locationManager.location.course > 0)] forKey:@"hasBearing"];
@@ -413,6 +494,7 @@ static char notificationPermissionKey;
             
             NSMutableDictionary *transitionEvent = [NSMutableDictionary dictionary];
             [transitionEvent setValue:[NSArray arrayWithObject:region.identifier] forKey:@"ids"];
+            [transitionEvent setValue:[NSNumber numberWithInt:transitionType] forKey:@"transitionType"];
             [transitionEvent setValue:transitionLocation forKey:@"location"];
             
             NSDictionary *notification = [fence objectForKey:@"notification"];
@@ -442,6 +524,7 @@ static char notificationPermissionKey;
             if (foreground && (SYSTEM_VERSION_LESS_THAN(@"10.0") || !geofenceHandler.forceShow)) {
                 //The app is in foreground and runs on either iOS < 10 or forceShow is disabled
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    NSLog(@"foreground && !forceShow || iOS < 10: Send to js");
                     [geofenceHandler sendEvent:transitionEvent];
                 });
             } else {
@@ -460,6 +543,7 @@ static char notificationPermissionKey;
                 [userInfo setValue:[NSNumber numberWithInt:notificationId] forKey:@"notificationId"];
 
                 if (message != nil) {
+                    NSLog(@"Sending notification with message %@", message);
                     if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"10.0")) {
                         UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
                             
@@ -509,7 +593,11 @@ static char notificationPermissionKey;
                         if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"8.0")) {
                             localNotification.category = [notification objectForKey:@"category"];
                         }
+                        
+                        [[UIApplication sharedApplication] scheduleLocalNotification:localNotification];
                     }
+                } else {
+                    NSLog(@"No message body, skipping notification");
                 }
 
                 if (message == nil || (background != nil && [background boolValue])) {
@@ -517,10 +605,12 @@ static char notificationPermissionKey;
                     [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
                         
                     dispatch_async(dispatch_get_main_queue(), ^{
+                        NSLog(@"Sending to js");
                         [geofenceHandler sendEvent:backgroundEvent];
                     });
                 } else {
                     dispatch_async(dispatch_get_main_queue(), ^{
+                        NSLog(@"Sending to js");
                         [geofenceHandler sendEvent:transitionEvent];
                     });
                 }

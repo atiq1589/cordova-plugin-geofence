@@ -22,6 +22,6 @@
 - (NSDictionary*)getFence:(NSString*)id;
 - (NSArray*)getFences;
 - (void)checkLocationPermissions;
-- (void)checkPermissions:(UNAuthorizationOptions)types;
-- (BOOL)hasPermission;
+- (void)checkPermissions:(NSNumber*)types;
+- (NSNumber*)hasPermission;
 @end

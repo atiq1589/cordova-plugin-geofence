@@ -164,6 +164,7 @@
                 for(NSDictionary *event in self.events) {
                     [self sendEvent:event];
                 }
+                [self.events removeAllObjects];
             });
         }
     }];
@@ -254,7 +255,7 @@
         
         id<UIApplicationDelegate> delegate = [[UIApplication sharedApplication] delegate];
         if ([delegate respondsToSelector:@selector(hasPermission)]) {
-            permission = [delegate performSelector:@selector(hasPermission)];
+            permission = [[delegate performSelector:@selector(hasPermission)] boolValue];
         }
         
         CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsInt:(permission ? 1 : 0)];
@@ -311,9 +312,12 @@
 #pragma mark Helper
 
 - (void)sendEvent:(NSDictionary*)event {
+    NSLog(@"sendEvent");
     if (self.callbackId == nil) {
+        NSLog(@"callback not available adding to queue");
         [self.events addObject:event];
     } else {
+        NSLog(@"callback available sending to js");
         CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:event];
         result.keepCallback = [NSNumber numberWithBool:YES];
         [self.commandDelegate sendPluginResult:result callbackId:self.callbackId];
@@ -371,10 +375,6 @@
             completionHandler = nil;
         }
     }
-}
-
-- (UIApplication*)app {
-    return [UIApplication sharedApplication];
 }
 
 @end
