@@ -80,7 +80,7 @@
         </config-file>
         <config-file target="*-Info.plist" parent="UIBackgroundModes">
             <array>
-                <string>remote-notification</string>
+                <string>location</string>
             </array>
         </config-file>
         <preference name="GEOLOCATION_BACKGROUND_USAGE_DESCRIPTION"
@@ -93,12 +93,11 @@
         <config-file target="*-Info.plist" parent="NSLocationWhenInUseUsageDescription">
             <string>$GEOLOCATION_USAGE_DESCRIPTION</string>
         </config-file>
-        <header-file src="src/ios/AppDelegate+notification.h"/>
-        <source-file src="src/ios/AppDelegate+notification.m"/>
+        <header-file src="src/ios/AppDelegate+GeofencePlugin.h"/>
+        <source-file src="src/ios/AppDelegate+GeofencePlugin.m"/>
         <header-file src="src/ios/GeofencePlugin.h"/>
         <source-file src="src/ios/GeofencePlugin.m"/>
-        <framework src="libsqlite3.tbd"/>
-        <framework src="libz.tbd"/>
-        <framework src="WebKit.framework" weak="true"/>
+        <framework src="CoreLocation.framework" />
+        <franework src="UserNotifications.framework" />
     </platform>
 </plugin>
