@@ -454,6 +454,18 @@ static char notificationPermissionKey;
 }
 
 - (void)handleTransition:(int)transitionType forRegion:(CLRegion*)region {
+    BOOL foreground = [[UIApplication sharedApplication] applicationState] == UIApplicationStateActive;
+    __block UIBackgroundTaskIdentifier identifier = UIBackgroundTaskInvalid;
+    if (!foreground) {
+        identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            if (identifier != UIBackgroundTaskInvalid) {
+                NSLog(@"Expired");
+                [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                identifier = UIBackgroundTaskInvalid;
+            }
+        }];
+    }
+
     GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
 
     NSLog(@"handleTransition: %d, %@", transitionType, region.identifier);
@@ -509,7 +521,6 @@ static char notificationPermissionKey;
                 }
             }
 
-            BOOL foreground = [[UIApplication sharedApplication] applicationState] == UIApplicationStateActive;
             BOOL coldstart = YES;
             if (self.coldstart != nil) {
                 coldstart = [self.coldstart boolValue];
@@ -595,17 +606,6 @@ static char notificationPermissionKey;
                 }
 
                 if (message == nil || (background != nil && [background boolValue])) {
-                    __block UIBackgroundTaskIdentifier identifier = UIBackgroundTaskInvalid;
-                    if (!foreground) {
-                        identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-                            if (identifier != UIBackgroundTaskInvalid) {
-                                NSLog(@"Expired");
-                                [[UIApplication sharedApplication] endBackgroundTask:identifier];
-                                identifier = UIBackgroundTaskInvalid;
-                            }
-                        }];
-                    }
-
                     NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
                     [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
 
@@ -628,6 +628,13 @@ static char notificationPermissionKey;
                         }
 
                         [geofenceHandler sendEvent:backgroundEvent];
+                    });
+                } else if (!foreground) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (identifier != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                            identifier = UIBackgroundTaskInvalid;
+                        }
                     });
                 }
             }
