@@ -289,7 +289,7 @@ static char notificationPermissionKey;
     [self.locationManager startMonitoringSignificantLocationChanges];
     
     NSLog(@"geofencePluginDidEnterBackground");
-    UIBackgroundTaskIdentifier identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+    __block UIBackgroundTaskIdentifier identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
         if (identifier != UIBackgroundTaskInvalid) {
             NSLog(@"Expired");
             [[UIApplication sharedApplication] endBackgroundTask:identifier];
@@ -346,17 +346,9 @@ static char notificationPermissionKey;
             });
         };
         
-        if (geofenceHandler.handlerObj == nil) {
-            geofenceHandler.handlerObj = [NSMutableDictionary dictionaryWithCapacity:2];
-        }
-        
-        id notificationId = [transitionEvent objectForKey:@"notificationId"];
-        if (notificationId != nil) {
-            [geofenceHandler.handlerObj setObject:safeHandler forKey:notificationId];
-        } else {
-            [geofenceHandler.handlerObj setObject:safeHandler forKey:@"handler"];
-        }
-        
+        [geofenceHandler.tasks setObject:safeHandler forKey:@"handler"];
+        [transitionEvent setObject:@"handler" forKey:@"task"];
+
         dispatch_async(dispatch_get_main_queue(), ^{
             [geofenceHandler sendEvent:transitionEvent];
         });
@@ -432,7 +424,7 @@ static char notificationPermissionKey;
 
 - (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
     NSLog(@"didStartMonitoringForRegion %@", region.identifier);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.2 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200000000), dispatch_get_main_queue(), ^{
         [manager requestStateForRegion:region];
     });
 }
@@ -441,7 +433,7 @@ static char notificationPermissionKey;
     NSLog(@"monitoringDidFailForRegion %@ - %@", region.identifier, [error localizedDescription]);
 
     if (error.domain == kCLErrorDomain && error.code == 5) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.2 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200000000), dispatch_get_main_queue(), ^{
             [manager requestStateForRegion:region];
         });
     } else {
