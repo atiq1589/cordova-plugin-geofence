@@ -605,9 +605,12 @@ static char notificationPermissionKey;
                     NSLog(@"No message body, skipping notification");
                 }
 
-                if (message == nil || (background != nil && [background boolValue])) {
+                if (message == nil || geofenceHandler.forceShow || (background != nil && [background boolValue])) {
                     NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
-                    [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
+
+                    if (background != nil && [background boolValue]) {
+                        [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
+                    }
 
                     dispatch_async(dispatch_get_main_queue(), ^{
                         NSLog(@"Sending to js");
