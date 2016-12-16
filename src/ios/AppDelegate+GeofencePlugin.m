@@ -345,7 +345,11 @@ static char notificationPermissionKey;
                 completionHandler();
             });
         };
-        
+
+        if (geofenceHandler.tasks == nil) {
+            geofenceHandler.tasks = [NSMutableDictionary dictionary];
+        }
+
         [geofenceHandler.tasks setObject:safeHandler forKey:@"handler"];
         [transitionEvent setObject:@"handler" forKey:@"task"];
 
@@ -388,17 +392,13 @@ static char notificationPermissionKey;
                     });
                 };
             
-                if (geofenceHandler.handlerObj == nil) {
-                    geofenceHandler.handlerObj = [NSMutableDictionary dictionaryWithCapacity:2];
+                if (geofenceHandler.tasks == nil) {
+                    geofenceHandler.tasks = [NSMutableDictionary dictionary];
                 }
             
-                id notificationId = [transitionEvent objectForKey:@"notificationId"];
-                if (notificationId != nil) {
-                    [geofenceHandler.handlerObj setObject:safeHandler forKey:notificationId];
-                } else {
-                    [geofenceHandler.handlerObj setObject:safeHandler forKey:@"handler"];
-                }
-            
+                [geofenceHandler.tasks setObject:safeHandler forKey:@"handler"];
+                [transitionEvent setObject:@"handler" forKey:@"task"];
+
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [geofenceHandler sendEvent:transitionEvent];
                 });
@@ -612,6 +612,10 @@ static char notificationPermissionKey;
                     dispatch_async(dispatch_get_main_queue(), ^{
                         NSLog(@"Sending to js");
                         if (identifier != UIBackgroundTaskInvalid) {
+                            if (geofenceHandler.tasks == nil) {
+                                geofenceHandler.tasks = [NSMutableDictionary dictionary];
+                            }
+
                             [geofenceHandler.tasks setObject:^void (){
                                 dispatch_async(dispatch_get_main_queue(), ^{
                                     if (identifier != UIBackgroundTaskInvalid) {
