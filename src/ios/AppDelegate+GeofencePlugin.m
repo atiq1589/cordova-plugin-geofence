@@ -495,7 +495,7 @@ static char notificationPermissionKey;
             [transitionLocation setValue:[NSNumber numberWithDouble:self.locationManager.location.altitude] forKey:@"altitude"];
             [transitionLocation setValue:[NSNumber numberWithFloat:self.locationManager.location.course] forKey:@"bearing"];
             [transitionLocation setValue:[NSNumber numberWithFloat:self.locationManager.location.speed] forKey:@"speed"];
-            [transitionLocation setValue:[NSNumber numberWithLong:timestamp] forKey:@"time"];
+            [transitionLocation setValue:[NSNumber numberWithLongLong:timestamp] forKey:@"time"];
             [transitionLocation setValue:[NSNumber numberWithBool:YES] forKey:@"hasAccuracy"];
             [transitionLocation setValue:[NSNumber numberWithBool:YES] forKey:@"hasAltitude"];
             [transitionLocation setValue:[NSNumber numberWithBool:(self.locationManager.location.course > 0)] forKey:@"hasBearing"];
