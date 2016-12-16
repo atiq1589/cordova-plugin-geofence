@@ -4,11 +4,10 @@
 @implementation GeofencePlugin
 
 @synthesize events;
-
 @synthesize callbackId;
 @synthesize clearBadge;
 @synthesize forceShow;
-@synthesize task;
+@synthesize tasks;
 
 - (void)init:(CDVInvokedUrlCommand*)command;
 {
@@ -267,11 +266,13 @@
     NSLog(@"Geofence Plugin finish called");
 
     [self.commandDelegate runInBackground:^ {
-        NSString* notId = [command.arguments objectAtIndex:0];
+        id task = [command.arguments objectAtIndex:0];
 
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.1 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self stopBackgroundTask];
-        });
+        if (task != nil && task isKindOfClass:[NSNumber class]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.1 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self stopBackgroundTask:task];
+            });
+        }
 
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
@@ -284,25 +285,29 @@
 - (void)load {
     NSString *path = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)[0];
     NSString *filename = [path stringByAppendingString:@"pending.dat"];
-    
+
     if ([[NSFileManager defaultManager] fileExistsAtPath:filename]) {
         self.events = [NSMutableArray arrayWithContentsOfFile:filename];
     }
-    
-    if (self.events == NULL) {
+
+    if (self.events == nil) {
         self.events = [NSMutableArray array];
+    }
+
+    if (self.tasks == nil) {
+        self.tasks = [NSMutableDictionary dictionary];
     }
 }
 
 - (void)save {
     NSString *path = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)[0];
     NSString *filename = [path stringByAppendingString:@"pending.dat"];
-    
+
     if ([[NSFileManager defaultManager] fileExistsAtPath:filename]) {
         self.events = [NSMutableArray arrayWithContentsOfFile:filename];
     }
-    
-    if (self.events == NULL) {
+
+    if (self.events == nil) {
         self.events = [NSMutableArray array];
     }
 }
@@ -361,12 +366,13 @@
     return myAction;
 }
 
--(void)stopBackgroundTask
+-(void)stopBackgroundTask:(NSNumber*)task
 {
     NSLog(@"Geofence Plugin stopBackgroundTask called");
-    if (self.task != UIBackgroundTaskInvalid) {
-        [[UIApplication sharedApplication] endBackgroundTask:self.task];
-        self.task = UIBackgroundTaskInvalid;
+
+    id handler = [self.tasks objectForKey:task];
+    if (handler != nil) {
+        ((void(^)()) handler)();
     }
 }
 

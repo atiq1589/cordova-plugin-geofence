@@ -10,13 +10,12 @@
 }
 
 @property (nonatomic, strong) NSMutableArray* events;
+@property (nonatomic, strong) NSMutableDictionary* tasks;
 
 @property (nonatomic, copy) NSString *callbackId;
 
 @property BOOL clearBadge;
 @property BOOL forceShow;
-
-@property (nonatomic, copy) UIBackgroundTaskIdentifier *task;
 
 - (void)init:(CDVInvokedUrlCommand*)command;
 - (void)addFences:(CDVInvokedUrlCommand*)command;

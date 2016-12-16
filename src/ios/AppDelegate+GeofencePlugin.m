@@ -289,7 +289,7 @@ static char notificationPermissionKey;
     [self.locationManager startMonitoringSignificantLocationChanges];
     
     NSLog(@"geofencePluginDidEnterBackground");
-    __block UIBackgroundTaskIdentifier identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+    UIBackgroundTaskIdentifier identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
         if (identifier != UIBackgroundTaskInvalid) {
             NSLog(@"Expired");
             [[UIApplication sharedApplication] endBackgroundTask:identifier];
@@ -473,7 +473,7 @@ static char notificationPermissionKey;
         
         if ([fenceId isEqualToString:region.identifier]) {
             id transitionTypeField = [fence objectForKey:@"transitionType"];
-            if (transitionTypeField == NULL || ![transitionTypeField isKindOfClass:[NSNumber class]] || ([transitionTypeField intValue] & transitionType) != transitionType) {
+            if (transitionTypeField == nil || ![transitionTypeField isKindOfClass:[NSNumber class]] || ([transitionTypeField intValue] & transitionType) != transitionType) {
                 continue;
             }
             
@@ -538,7 +538,7 @@ static char notificationPermissionKey;
                 int notificationId = -1;
                 if (notification != nil) {
                     id notificationIdField = [notification objectForKey:@"id"];
-                    if (notificationIdField != NULL && [notificationIdField isKindOfClass:[NSNumber class]]) {
+                    if (notificationIdField != nil && [notificationIdField isKindOfClass:[NSNumber class]]) {
                         notificationId = [[notification objectForKey:@"id"] intValue];
                     }
                 }
@@ -555,7 +555,7 @@ static char notificationPermissionKey;
                         content.body = message;
 
                         NSString *sound = [notification objectForKey:@"sound"];
-                        if (sound != NULL && ![sound isEqualToString:@"default"]) {
+                        if (sound != nil && ![sound isEqualToString:@"default"]) {
                             content.sound = [UNNotificationSound soundNamed:sound];
                         } else {
                             content.sound = [UNNotificationSound defaultSound];
@@ -572,7 +572,7 @@ static char notificationPermissionKey;
                         UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:[[NSString alloc] initWithFormat:@"%d", notificationId] content:content trigger:nil];
                             
                         [self.notificationCenter addNotificationRequest:request withCompletionHandler:^(NSError * _Nullable error) {
-                            if (error != NULL) {
+                            if (error != nil) {
                                 NSLog(@"GeofencePlugin addNotificationRequest error: %@", [error localizedDescription]);
                             }
                         }];
@@ -586,7 +586,7 @@ static char notificationPermissionKey;
                         }
                         
                         NSString *sound = [notification objectForKey:@"sound"];
-                        if (sound != NULL && ![sound isEqualToString:@"default"]) {
+                        if (sound != nil && ![sound isEqualToString:@"default"]) {
                             localNotification.soundName = sound;
                         } else {
                             localNotification.soundName = UILocalNotificationDefaultSoundName;
@@ -613,14 +613,25 @@ static char notificationPermissionKey;
                     }];
                 }
 
+                NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
                 if (message == nil || (background != nil && [background boolValue])) {
-                    NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
                     [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
                 }
 
                 dispatch_async(dispatch_get_main_queue(), ^{
                     NSLog(@"Sending to js");
-                    geofenceHandler.task = identifier;
+                    if (identifier != UIBackgroundTaskInvalid) {
+                        [geofenceHandler.tasks setObject:^void (){
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                if (identifier != UIBackgroundTaskInvalid) {
+                                    [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                                    identifier = UIBackgroundTaskInvalid;
+                                }
+                            });
+                        } forKey:[NSNumber numberWithInt:identifier]];
+                        [backgroundEvent setValue:[NSNumber numberWithInt:identifier] forKey:@"task"];
+                    }
+
                     [geofenceHandler sendEvent:backgroundEvent];
                 });
             }
