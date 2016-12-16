@@ -602,38 +602,38 @@ static char notificationPermissionKey;
                     NSLog(@"No message body, skipping notification");
                 }
 
-                __block UIBackgroundTaskIdentifier identifier = UIBackgroundTaskInvalid;
-                if (!foreground) {
-                    identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-                        if (identifier != UIBackgroundTaskInvalid) {
-                            NSLog(@"Expired");
-                            [[UIApplication sharedApplication] endBackgroundTask:identifier];
-                            identifier = UIBackgroundTaskInvalid;
-                        }
-                    }];
-                }
-
-                NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
                 if (message == nil || (background != nil && [background boolValue])) {
-                    [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
-                }
-
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    NSLog(@"Sending to js");
-                    if (identifier != UIBackgroundTaskInvalid) {
-                        [geofenceHandler.tasks setObject:^void (){
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                                if (identifier != UIBackgroundTaskInvalid) {
-                                    [[UIApplication sharedApplication] endBackgroundTask:identifier];
-                                    identifier = UIBackgroundTaskInvalid;
-                                }
-                            });
-                        } forKey:[NSNumber numberWithInt:identifier]];
-                        [backgroundEvent setValue:[NSNumber numberWithInt:identifier] forKey:@"task"];
+                    __block UIBackgroundTaskIdentifier identifier = UIBackgroundTaskInvalid;
+                    if (!foreground) {
+                        identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+                            if (identifier != UIBackgroundTaskInvalid) {
+                                NSLog(@"Expired");
+                                [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                                identifier = UIBackgroundTaskInvalid;
+                            }
+                        }];
                     }
 
-                    [geofenceHandler sendEvent:backgroundEvent];
-                });
+                    NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
+                    [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
+
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        NSLog(@"Sending to js");
+                        if (identifier != UIBackgroundTaskInvalid) {
+                            [geofenceHandler.tasks setObject:^void (){
+                                dispatch_async(dispatch_get_main_queue(), ^{
+                                    if (identifier != UIBackgroundTaskInvalid) {
+                                        [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                                        identifier = UIBackgroundTaskInvalid;
+                                    }
+                                });
+                            } forKey:[NSNumber numberWithInt:identifier]];
+                            [backgroundEvent setValue:[NSNumber numberWithInt:identifier] forKey:@"task"];
+                        }
+
+                        [geofenceHandler sendEvent:backgroundEvent];
+                    });
+                }
             }
         }
     }
