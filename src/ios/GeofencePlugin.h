@@ -16,7 +16,7 @@
 @property BOOL clearBadge;
 @property BOOL forceShow;
 
-@property (nonatomic, strong) NSMutableDictionary *handlerObj;
+@property (nonatomic, copy) UIBackgroundTaskIdentifier *task;
 
 - (void)init:(CDVInvokedUrlCommand*)command;
 - (void)addFences:(CDVInvokedUrlCommand*)command;

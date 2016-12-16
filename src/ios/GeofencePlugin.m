@@ -8,8 +8,7 @@
 @synthesize callbackId;
 @synthesize clearBadge;
 @synthesize forceShow;
-
-@synthesize handlerObj;
+@synthesize task;
 
 - (void)init:(CDVInvokedUrlCommand*)command;
 {
@@ -365,15 +364,9 @@
 -(void)stopBackgroundTask:(NSTimer*)timer
 {
     NSLog(@"Geofence Plugin stopBackgroundTask called");
-
-    if (handlerObj) {
-        NSLog(@"Geofence Plugin handlerObj");
-        completionHandler = [handlerObj[[timer userInfo]] copy];
-        if (completionHandler) {
-            NSLog(@"Geofence Plugin: stopBackgroundTask (remaining t: %f)", [[UIApplication sharedApplication] backgroundTimeRemaining]);
-            completionHandler(UIBackgroundFetchResultNewData);
-            completionHandler = nil;
-        }
+    if (self.task != UIBackgroundTaskInvalid) {
+        [[UIApplication sharedApplication] endBackgroundTask:self.task];
+        self.task = UIBackgroundTaskInvalid;
     }
 }
 

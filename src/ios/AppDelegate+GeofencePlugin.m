@@ -228,6 +228,7 @@ static char notificationPermissionKey;
     
     self.locationManager = [[CLLocationManager alloc] init];
     self.locationManager.delegate = self;
+    // self.locationmanager.desiredAccuracy = kCLLocationAccuracyBest;
 
     if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"10.0")) {
         self.notificationCenter = [UNUserNotificationCenter currentNotificationCenter];
@@ -431,14 +432,18 @@ static char notificationPermissionKey;
 
 - (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
     NSLog(@"didStartMonitoringForRegion %@", region.identifier);
-    [manager requestStateForRegion:region];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.2 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [manager requestStateForRegion:region];
+    });
 }
 
 - (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error {
     NSLog(@"monitoringDidFailForRegion %@ - %@", region.identifier, [error localizedDescription]);
 
     if (error.domain == kCLErrorDomain && error.code == 5) {
-        [manager requestStateForRegion:region];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.2 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [manager requestStateForRegion:region];
+        });
     } else {
         GeofencePlugin *geofenceHandler = [self getCommandInstance:@"Geofence"];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -546,24 +551,21 @@ static char notificationPermissionKey;
                     NSLog(@"Sending notification with message %@", message);
                     if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"10.0")) {
                         UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
-                            
-                        if (notification != NULL) {
-                            content.title = [notification objectForKey:@"title"];
-                            content.body = message;
-                                
-                            NSString *sound = [notification objectForKey:@"sound"];
-                            if (sound != NULL && ![sound isEqualToString:@"default"]) {
-                                content.sound = [UNNotificationSound soundNamed:sound];
-                            } else {
-                                content.sound = [UNNotificationSound defaultSound];
-                            }
-                                
-                            //TODO: attachments: @see https://developer.apple.com/reference/usernotifications/unnotificationattachment/1649987-attachmentwithidentifier?language=objc
-                            //TODO: buttons: @see https://developer.apple.com/reference/usernotifications/unnotificationcategory/2196944-categorywithidentifier?language=objc
-                            //TODO: text input action: @see https://developer.apple.com/reference/usernotifications/untextinputnotificationaction?language=objc
-                            //content.category = [notification objectForKey:category];
+                        content.title = [notification objectForKey:@"title"];
+                        content.body = message;
+
+                        NSString *sound = [notification objectForKey:@"sound"];
+                        if (sound != NULL && ![sound isEqualToString:@"default"]) {
+                            content.sound = [UNNotificationSound soundNamed:sound];
+                        } else {
+                            content.sound = [UNNotificationSound defaultSound];
                         }
-                            
+
+                        //TODO: attachments: @see https://developer.apple.com/reference/usernotifications/unnotificationattachment/1649987-attachmentwithidentifier?language=objc
+                        //TODO: buttons: @see https://developer.apple.com/reference/usernotifications/unnotificationcategory/2196944-categorywithidentifier?language=objc
+                        //TODO: text input action: @see https://developer.apple.com/reference/usernotifications/untextinputnotificationaction?language=objc
+                        //content.category = [notification objectForKey:category];
+
                         content.badge = [[NSNumber alloc] initWithLong:[[UIApplication sharedApplication] applicationIconBadgeNumber] + 1];
                         content.userInfo = userInfo;
                             
@@ -600,20 +602,27 @@ static char notificationPermissionKey;
                     NSLog(@"No message body, skipping notification");
                 }
 
+                __block UIBackgroundTaskIdentifier identifier = UIBackgroundTaskInvalid;
+                if (!foreground) {
+                    identifier = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+                        if (identifier != UIBackgroundTaskInvalid) {
+                            NSLog(@"Expired");
+                            [[UIApplication sharedApplication] endBackgroundTask:identifier];
+                            identifier = UIBackgroundTaskInvalid;
+                        }
+                    }];
+                }
+
                 if (message == nil || (background != nil && [background boolValue])) {
                     NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
                     [backgroundEvent setValue:[NSNumber numberWithBool:YES] forKey:@"background"];
-                        
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        NSLog(@"Sending to js");
-                        [geofenceHandler sendEvent:backgroundEvent];
-                    });
-                } else {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        NSLog(@"Sending to js");
-                        [geofenceHandler sendEvent:transitionEvent];
-                    });
                 }
+
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSLog(@"Sending to js");
+                    geofenceHandler.task = identifier;
+                    [geofenceHandler sendEvent:backgroundEvent];
+                });
             }
         }
     }
