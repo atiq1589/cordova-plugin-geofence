@@ -269,8 +269,8 @@
     [self.commandDelegate runInBackground:^ {
         NSString* notId = [command.arguments objectAtIndex:0];
 
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(stopBackgroundTask:) userInfo:notId repeats:NO];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, Int64(0.1 * Double(NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self stopBackgroundTask];
         });
 
         CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -361,7 +361,7 @@
     return myAction;
 }
 
--(void)stopBackgroundTask:(NSTimer*)timer
+-(void)stopBackgroundTask
 {
     NSLog(@"Geofence Plugin stopBackgroundTask called");
     if (self.task != UIBackgroundTaskInvalid) {
