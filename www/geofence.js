@@ -281,7 +281,7 @@ Geofence.prototype.off = function (eventName, handle) {
     }
 };
 
-Geofence.prototype.finish = function (successCallback, errorCallback, id) {
+Geofence.prototype.finish = function (successCallback, errorCallback) {
     if (!successCallback) {
         successCallback = function () {
         };
@@ -289,9 +289,6 @@ Geofence.prototype.finish = function (successCallback, errorCallback, id) {
     if (!errorCallback) {
         errorCallback = function () {
         };
-    }
-    if (!id) {
-        id = 'handler';
     }
 
     if (typeof successCallback !== 'function') {
@@ -304,7 +301,7 @@ Geofence.prototype.finish = function (successCallback, errorCallback, id) {
         return;
     }
 
-    exec(successCallback, errorCallback, 'Geofence', 'finish', [id]);
+    exec(successCallback, errorCallback, 'Geofence', 'finish', []);
 };
 
 /*!
