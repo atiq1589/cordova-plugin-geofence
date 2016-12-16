@@ -605,7 +605,7 @@ static char notificationPermissionKey;
                     NSLog(@"No message body, skipping notification");
                 }
 
-                if (message == nil || geofenceHandler.forceShow || (background != nil && [background boolValue])) {
+                if (message == nil || (foreground && geofenceHandler.forceShow) || (background != nil && [background boolValue])) {
                     NSMutableDictionary *backgroundEvent = [userInfo mutableCopy];
 
                     if (background != nil && [background boolValue]) {
