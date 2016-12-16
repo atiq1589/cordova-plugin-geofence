@@ -372,6 +372,7 @@
 
     id handler = [self.tasks objectForKey:task];
     if (handler != nil) {
+        [self.tasks removeObjectForKey:task];
         ((void(^)()) handler)();
     }
 }
