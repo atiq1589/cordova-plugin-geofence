@@ -59,7 +59,7 @@ static char notificationPermissionKey;
 
 - (void)addFences:(NSArray*)fences {
     if (fences == nil) {
-        NSLog(@"restoring %d fences", [self.fences count]);
+        NSLog(@"restoring %d fences", (unsigned long)[self.fences count]);
         
         for(int i = 0; i < [self.fences count]; i++) {
             NSDictionary *fence = [self.fences objectAtIndex:i];
@@ -93,7 +93,7 @@ static char notificationPermissionKey;
             }
         }
     } else {
-        NSLog(@"addFences called with %d fences", [fences count]);
+        NSLog(@"addFences called with %d fences", (unsigned long)[fences count]);
         for (NSDictionary* fence in fences) {
             NSString *fenceId = [fence objectForKey:@"id"];
             if (fenceId == nil) {
@@ -623,8 +623,8 @@ static char notificationPermissionKey;
                                         identifier = UIBackgroundTaskInvalid;
                                     }
                                 });
-                            } forKey:[NSNumber numberWithInt:identifier]];
-                            [backgroundEvent setValue:[NSNumber numberWithInt:identifier] forKey:@"task"];
+                            } forKey:[NSNumber numberWithLong:identifier]];
+                            [backgroundEvent setValue:[NSNumber numberWithLong:identifier] forKey:@"task"];
                         }
 
                         [geofenceHandler sendEvent:backgroundEvent];
